@@ -19,6 +19,7 @@
 #define FAC 1
 
 #define LED 1
+#define RELAY 0
 
 //Default write it to the register in one time
 #define USESPISINGLEREADWRITE 0
@@ -48,10 +49,17 @@ struct send_data {
 	int fanON : 1;
 };
 
+struct rec_command {
+  /*! Alarm ON/OFF */
+  int alarmON : 1;
+  /*! Fan ON/OFF */
+  int fanON : 1;
+};
+
 #define n_pin 2 //3
 int PINS[] = {27,28};//,29};
 float low_t = 0, high_t =40, low_p = 500, high_p =2000, low_h = 20, high_h =80;
-int priority = 5;
+int priority = 50;
 sem_t synchro[n_pin];
 struct bme280_data comp_data[n_pin];
 int sockfd = -1;
@@ -94,7 +102,7 @@ int init_connection()
 
 	// assign IP, PORT 
 	servaddr.sin_family = AF_INET; 
-	servaddr.sin_addr.s_addr = inet_addr("192.168.1.220"); 
+	servaddr.sin_addr.s_addr = inet_addr("192.168.43.153"); 
 	servaddr.sin_port = htons(PORT); 
 
 	// connect the client socket to server socket 
@@ -106,6 +114,43 @@ int init_connection()
 		printf("connected to the server..\n"); 
 
 	return sockfd;
+}
+
+
+void* receive_command(void* none) {
+  
+  int read_size;
+  struct rec_command command;
+  
+  pthread_t t_alarm;
+  pthread_attr_t tattr1;
+  struct sched_param param1;
+  pthread_attr_init (&tattr1);
+  pthread_attr_getschedparam (&tattr1, &param1);
+  param1.sched_priority = 10;
+  pthread_attr_setschedparam (&tattr1, &param1);
+  
+  while( (read_size = recv(sockfd , (void*) &command , sizeof(struct rec_command) , 0)) > 0 )
+  {
+    pthread_mutex_lock (&mutex_data);
+    if (command.alarmON) {
+      if (data.alarmON == 0) {
+	data.alarmON = 1;
+	pthread_create(&t_alarm, &tattr1, LED_blink, NULL);
+      }
+    }
+    if (command.fanON) {
+      digitalWrite (RELAY, HIGH);
+      data.fanON = 1;
+    }
+    else {
+      digitalWrite (RELAY, LOW);
+      data.fanON = 0;
+    }
+    
+    pthread_mutex_unlock (&mutex_data);
+  }
+  return NULL;
 }
 
 
@@ -262,7 +307,7 @@ void* merge_and_send(void* no_input) {
   struct sched_param param1;
   pthread_attr_init (&tattr1);
   pthread_attr_getschedparam (&tattr1, &param1);
-  param1.sched_priority = 50;
+  param1.sched_priority = 10;
   pthread_attr_setschedparam (&tattr1, &param1);
   
   struct timespec timestamp;                              /* Period of the task */
@@ -302,8 +347,10 @@ void* merge_and_send(void* no_input) {
     
     write(sockfd, &data, sizeof(struct send_data));
     
-    if (data.temperature < low_t || data.temperature > high_t || data.pressure < low_p || data.pressure > high_p || data.humidity < low_h || data.humidity > high_h)
+    if (data.alarmON != 1 && (data.temperature < low_t || data.temperature > high_t || data.pressure < low_p || data.pressure > high_p || data.humidity < low_h || data.humidity > high_h)) {
+      data.alarmON = 1;
       pthread_create(&t_alarm, &tattr1, LED_blink, NULL);
+    }
     
     pthread_mutex_unlock (&mutex_data);
   
@@ -367,9 +414,18 @@ int main(int argc, char* argv[]) {
   struct sched_param param1;
   pthread_attr_init (&tattr1);
   pthread_attr_getschedparam (&tattr1, &param1);
-  param1.sched_priority = 20;
+  param1.sched_priority = 60;
   pthread_attr_setschedparam (&tattr1, &param1);
   pthread_create(&T3, &tattr1, merge_and_send, NULL);
+  
+  pthread_t T4;
+  pthread_attr_t tattr2;
+  struct sched_param param2;
+  pthread_attr_init (&tattr2);
+  pthread_attr_getschedparam (&tattr2, &param2);
+  param1.sched_priority = 60;
+  pthread_attr_setschedparam (&tattr2, &param2);
+  pthread_create(&T4, &tattr2, receive_command, NULL);
 
   pthread_join(tid[0], NULL);
   
