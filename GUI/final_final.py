@@ -3,6 +3,7 @@ import threading
 import socket
 import queue
 import time
+import numpy as np
 
 #Initializing coordinates
 #Factory 1
@@ -14,7 +15,7 @@ yr1 = 70
 xr2 = 240
 yr2 = 100
 
-host = '192.168.43.204'
+host = '192.168.1.105'
 port = 9090
 
 mySocket = socket.socket()
@@ -23,25 +24,65 @@ mySocket.connect((host,port))
 def runloop(thread_queue=None):
 ##After result is produced put it in queue
       while True:
-           data = mySocket.recv(4).decode()
-           print(data)
+           data = mySocket.recv(100).decode()
+           #print(data)
            thread_queue.put(data)
            time.sleep(2)
 
-def sendCommand(thread_queue=None):
+def sendCommandON():
 ##After result is produced put it in queue
-      while True:
-           mySocket.sendall(b'a: 1')
-           print("AlarmOn")
+           mySocket.sendall(b'1f: 1')
+           print("FanOn")
 
-class MainApp():
+def sendCommandOFF():
+##After result is produced put it in queue
+           mySocket.sendall(b'1f: 0')
+           print("FanOFF")
+
+def sendCommandON2():
+##After result is produced put it in queue
+           mySocket.sendall(b'1r: 1')
+           print("RelayOn")
+
+def sendCommandOFF2():
+##After result is produced put it in queue
+           mySocket.sendall(b'1r: 0')
+           print("RelayOFF")
+
+def sendCommandONC():
+##After result is produced put it in queue
+           mySocket.sendall(b'2f: 1')
+           print("FanOn")
+
+def sendCommandOFFC():
+##After result is produced put it in queue
+           mySocket.sendall(b'2f: 0')
+           print("FanOFF")
+
+def sendCommandON2C():
+##After result is produced put it in queue
+           mySocket.sendall(b'2r: 1')
+           print("RelayOn")
+
+def sendCommandOFF2C():
+##After result is produced put it in queue
+           mySocket.sendall(b'2r: 0')
+           print("RelayOFF")
+
+class MainApp(threading.Thread):
 
    def __init__(self):
 ####### Do something ######
+      threading.Thread.__init__(self)
+      self.start()
       self.thread_queue = queue.Queue()
+      self.Fann = 0
+      self.Relayy = 0
+      self.FannC = 0
+      self.RelayyC = 0
       self.root = tk.Tk()
       self.root.title("Factories 4.0")
-      self.c = tk.Canvas(self.root, bg="gray92", height=320, width=750)
+      self.c = tk.Canvas(self.root, bg="gray92", height=400, width=900)
       self.name = self.c.create_text(180, 20, font=("Helvetica", 18), text="Factory LeMonde")
       self.name = self.c.create_text(180, 55, font=("Helvetica", 13), text="Sensors")
       
@@ -65,7 +106,19 @@ class MainApp():
       self.Humidity = tk.Label(self.root, bg="sienna1", height = 2, width =12) # Element to be updated
       self.Humidity.place(x=130,y=190)
       self.Humidity.config(text="Humidity")
-      self.name = self.c.create_text(250, 205, font=("Helvetica", 13), text="°C")
+      self.name = self.c.create_text(250, 205, font=("Helvetica", 13), text="%")
+ 
+      #Actuators
+      self.actuators = self.c.create_text(180, 250, font=("Helvetica", 13), text="Actuators")
+      self.name = self.c.create_text(60, 290, font=("Helvetica", 13), text="Alarm")
+      self.Alarm = tk.Label(self.root, bg="green", height = 2, width =12) # Element to be updated
+      self.Alarm.config(text="OFF")
+      self.Alarm.place(x=130,y=270)
+
+      self.F = tk.Label(self.root, bg="green", height = 2, width =12) # Element to be updated
+      self.name = self.c.create_text(60, 350, font=("Helvetica", 13), text="Fan")
+      self.F.config(text="OFF")
+      self.F.place(x=130,y=330)
 
       #Factory 2
       self.name = self.c.create_text(530, 20, font=("Helvetica", 18), text="Factory Chocolatin")
@@ -89,53 +142,135 @@ class MainApp():
       self.Humidity2 = tk.Label(self.root, bg="cyan3", height = 2, width =12) # Element to be updated
       self.Humidity2.place(x=480,y=190)
       self.Humidity2.config(text="Humidity")
-      self.name2 = self.c.create_text(600, 205, font=("Helvetica", 13), text="°C"
-      self.Alarm = tk.Button(self.root, text="Alarm",command=self.commandGUI)
-      self.Alarm.place(x=680,y=50)
+      self.name2 = self.c.create_text(600, 205, font=("Helvetica", 13), text="%")
+
+      #Actuators
+      self.actuators = self.c.create_text(530, 250, font=("Helvetica", 13), text="Actuators")
+      self.name = self.c.create_text(410, 290, font=("Helvetica", 13), text="Alarm")
+      self.Alarm = tk.Label(self.root, bg="green", height = 2, width =12) # Element to be updated
+      self.Alarm.config(text="OFF")
+      self.Alarm.place(x=480,y=270)
+
+      self.F = tk.Label(self.root, bg="green", height = 2, width =12) # Element to be updated
+      self.name = self.c.create_text(410, 350, font=("Helvetica", 13), text="Fan")
+      self.F.config(text="OFF")
+      self.F.place(x=480,y=330)
+
+      #Commands
+      self.Start = tk.Button(self.root, text="Start",command=self.update_text)
+      self.Start.place(x=1,y=0)
+
+      self.Stop = tk.Button(self.root, text="Stop",command=self.StopThreads)
+      self.Stop.place(x=1,y=45)
+      
+
+      #Factory 1
+      self.name = self.c.create_text(750, 100, font=("Helvetica", 13), text="Command to Le Monde")
+      self.Fan= tk.Button(self.root, text="Fan OFF",command=self.commandGUI)
+      self.Fan.place(x=720,y=120)
+
+      self.Relay= tk.Button(self.root, text="Relay OFF",command=self.commandGUI2)
+      self.Relay.place(x=715,y=170)
+
+      #Factory 2
+      self.name = self.c.create_text(750, 220, font=("Helvetica", 13), text="Command to Chocolatin")
+      self.Fan2= tk.Button(self.root, text="Fan OFF",command=self.commandGUIC)
+      self.Fan2.place(x=720,y=240)
+
+      self.Relay2= tk.Button(self.root, text="Relay OFF",command=self.commandGUI2C)
+      self.Relay2.place(x=715,y=290)
       
       self.c.pack()
-
-      self.root.after(100, self.listen_for_result)
+      #self.root.after(100, self.listen_for_result)  
       self.root.mainloop()
-      self.update_text()
-
+      
    def update_text(self):
-      i = 1
 ##Spawn a new thread for running long loops in background
-      self.Temperature.config(text = "Counting")
       self.thread_queue = queue.Queue()
       self.new_thread = threading.Thread(target=runloop,kwargs={"thread_queue":self.thread_queue})
       self.new_thread.start()
+      self.root.after(1000)
+      self.new_thread3 = threading.Thread(target=self.listen_for_result)
+      self.new_thread3.start()
+
+   
+   def listen_for_result(self):
+#Check if there is something in the queue
       while True:
-          if queue.Empty:
-              print("Temperature")
+          if queue:
+              print("There is a socket")
               self.res1 = self.thread_queue.get(True)
-              print("sockets", self.res1)
-              self.root.update_idletasks()
-              self.Temperature.config(text = self.res1)
+              x = self.res1.split()
+              print(x[1])
+              if x[1] == "1":
+                  self.root.update_idletasks()
+                  self.Temperature.config(text = x[5])
+                  self.Pressure.config(text = x[7])
+                  self.Humidity.config(text = x[9])
+              else:
+                  self.root.update_idletasks()
+                  self.Temperature2.config(text = x[5])
+                  self.Pressure2.config(text = x[7])
+                  self.Humidity2.config(text = x[9])
+
               time.sleep(2)           
           else:
               print("Problems with the queue")
-      self.root.after(1000, self.listen_for_result)
 
-
-   def listen_for_result(self):
-#Check if there is something in the queue
-      try:
-          self.res = self.thread_queue.get(0)
-          time.sleep(1)
-          self.Temperature.config(text = "Loop Terminated")
-          self.root.after(100, self.listen_for_result)
-
-      except queue.Empty:
-          self.root.after(100, self.listen_for_result)
+   def StopThreads(self):
+       self.new_thread.end()
+       self.new_thread3.end()
 
    def commandGUI (self):
-##Spawn a new thread for running long loops in background
-      self.Alarm.config(text = "ON")
-      self.new_thread2 = threading.Thread(target=sendCommand)
-      self.new_thread2.start()
-      self.root.after(1000, self.listen_for_result)
+      if self.Fann == 1:
+          self.Fan.config(text = "Fan OFF")
+          self.new_thread2 = threading.Thread(target=sendCommandOFF)
+          self.new_thread2.start()
+          self.Fann = 0
+      else:
+          self.Fan.config(text = "Fan ON")
+          self.new_thread2 = threading.Thread(target=sendCommandON)
+          self.new_thread2.start()
+          self.Fann += 1
+
+
+   def commandGUI2 (self):
+      if self.Relayy == 1:
+          self.Relay.config(text = "Relay OFF")
+          self.new_thread4 = threading.Thread(target=sendCommandOFF2C)
+          self.new_thread4.start()
+          self.Relayy = 0
+      else:
+          self.Relay.config(text = "Relay ON")
+          self.new_thread4 = threading.Thread(target=sendCommandON2C)
+          self.new_thread4.start()
+          self.Relayy += 1
+
+   def commandGUIC (self):
+      if self.FannC == 1:
+          self.Fan2.config(text = "Fan OFF")
+          self.new_thread2 = threading.Thread(target=sendCommandOFFC)
+          self.new_thread2.start()
+          self.FannC = 0
+      else:
+          self.Fan2.config(text = "Fan ON")
+          self.new_thread2 = threading.Thread(target=sendCommandONC)
+          self.new_thread2.start()
+          self.FannC += 1
+
+
+   def commandGUI2C (self):
+      if self.RelayyC == 1:
+          self.Relay2.config(text = "Relay OFF")
+          self.new_thread4 = threading.Thread(target=sendCommandOFF2C)
+          self.new_thread4.start()
+          self.RelayyC = 0
+      else:
+          self.Relay2.config(text = "Relay ON")
+          self.new_thread4 = threading.Thread(target=sendCommandON2C)
+          self.new_thread4.start()
+          self.RelayyC += 1
+
 
 if __name__ == "__main__":
      main_app = MainApp()
