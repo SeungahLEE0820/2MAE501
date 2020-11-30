@@ -63,6 +63,7 @@ int main(void){
   s.pressure=7;
   s.humidity=8;
   if(s.fac==1){
+  pred(s,temp1,)
   swip(time1,s.timeStamp);
   
   swip(temp1,s.temperature);
