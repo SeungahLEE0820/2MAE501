@@ -21,17 +21,6 @@
 #define MAXCHAR 41
 #define MAX 50 
 
-/*typedef struct SensorData SensorData;
-struct SensorData {
-	
-	int factory ;
-	long int time ;
-	float temp ;
-	float press ;
-	float hum ;
-
-};
-*/
 
 struct data_receive{
 	int fac;
@@ -64,7 +53,41 @@ pthread_mutex_t mutex;
 int socket_desc1,socket_desc2, client_sock , c1, c2;
 struct sockaddr_in server1, server2 , client;
 
- 
+/* Global variables for temporal memory*/
+#define MEM_SIZE 5
+typedef struct TempMem TempMem;
+struct TempMem {
+	pthread_mutex_t MemMutex;
+	long long int time[MEM_SIZE] = {0};
+	double temp[MEM_SIZE] = {0};
+	double press[MEM_SIZE] = {0};
+	double hum[MEM_SIZE] = {0};
+	int alarmOn:1;
+        int fanOn:1;
+};
+
+
+TempMem MemFac1;
+TempMem MemFac2;
+
+void swip(double *array, double m){
+
+	for (int i = 0; i < (MEM_SIZE-1); i++) {
+
+		array[i] = array[i+1];
+	}
+
+	array[MEM_SIZE-1] = m;
+}
+
+typedef struct GUIcommands GUIcommands;
+struct GUIcommands{
+	int Fan1 = 0;
+	int Fan2 = 0;
+};
+
+GUIcommands commands;
+
 
 void *fac_connection_handler(void *);
 void *GUI_connection_handler(void *);
@@ -158,7 +181,7 @@ int main(int argc , char *argv[]){
 	
 	/* Prepare the sockaddr_in structure */
 	server1.sin_family = AF_INET;
-	server1.sin_addr.s_addr = inet_addr("192.168.43.204");
+	server1.sin_addr.s_addr = inet_addr("192.168.43.245");
 	server1.sin_port = htons( 8080 );
 
 
@@ -182,7 +205,7 @@ int main(int argc , char *argv[]){
 
 	/* Prepare the sockaddr_in structure */
 	server2.sin_family = AF_INET;
-	server2.sin_addr.s_addr = inet_addr("192.168.43.204");
+	server2.sin_addr.s_addr = inet_addr("192.168.43.245");
 	server2.sin_port = htons( 9090 );
 
 	/* Bind the socket and Check possible errors */
@@ -214,68 +237,97 @@ int main(int argc , char *argv[]){
  * */
 void *fac_connection_handler(void *socket_desc) {
     
-    int sock = *(int*)socket_desc;  // Socket Descriptor
-    int read_size;                  // Size of incoming messages
-    //char client_message[2000];      // buffer to store sensor data
-    //FILE *DBp;                      // Pointer to Data Base File
-    struct data_receive message;
-    char client_message;
-    std::ofstream myfile;
-  
-    /* Receive a message from client */
-        //end of string marker
-	//client_message[read_size] = '\0';
+	int sock = *(int*)socket_desc;  // Socket Descriptor
+	int read_size;                  // Size of incoming messages
+	struct data_receive message;
+	char client_message;
+	std::ofstream myfile;
+  	char command2fac[5];
+  	char buff3[2];		
+	//while( (read_size = recv(sock , (void*) &message , sizeof(struct data_receive) , 0)) > 0 ) {
 	
-        // Entering Critical Section	
+	for(;;){
 		
+		// Build the string to send the information about Fan and Alarms
+		bzero(command2fac, sizeof(command2fac));
+		sprintf(buff3, "%d", commands.Fan1);
+		strcat( command2fac, buff3);
+		sprintf(buff3, "%d", MemFac1.alarmOn);
+	    strcat( command2fac, buff3);
+	    sprintf(buff3, "%d", commands.Fan2);
+	    strcat( command2fac, buff3);
+	    sprintf(buff3, "%d", MemFac2.alarmOn);
+		strcat( command2fac, buff3);
+		write(sock, command2fac, sizeof(command2fac));
+		
+		// Wait for the reply
+		read(sock , (void*) &message , sizeof(struct data_receive));
+		/* Update the temporal memory */
+		if (message.fac == 1){
+			
+			pthread_mutex_lock( &(MemFac1.MemMutex) );       // Protect the variable
+			swip(&(MemFac1.temp[0]), message.temperature);   // Update temperature buffer
+			swip(&(MemFac1.press[0]), message.preassure);    // Update pressure buffer
+			swip(&(MemFac1.hum[0]), message.humidity);       // Update humidity buffer
+			MemFac1.alarmOn = message.alarmOn;               // Current state of Alarm
+			MemFac1.fanOn = message.fanOn;			 // Current state of Actuator
+			pthread_mutex_unlock ( &(MemFac1.MemMutex));     // End of critical Section
+			
+			
+		} else if (message.fac == 2){
 
+			pthread_mutex_lock( &(MemFac2.MemMutex) );       // Protect the variable
+			swip(&(MemFac2.temp[0]), message.temperature);   // Update temperature buffer
+			swip(&(MemFac2.press[0]), message.preassure);    // Update pressure buffer
+			swip(&(MemFac2.hum[0]), message.humidity);       // Update humidity buffer
+			MemFac2.alarmOn = message.alarmOn;               // Current state of Alarm
+			MemFac2.fanOn = message.fanOn;			 // Current state of Actuator
+			pthread_mutex_unlock ( &(MemFac2.MemMutex));     // End of critical Section
 
-    while( (read_size = recv(sock , (void*) &message , sizeof(struct data_receive) , 0)) > 0 )
-    {					
-        char buff1[200];
-	char buff2[19];
-	bzero(buff1, sizeof(buff1));
+		}					
+
+		/* Build the message that will be stored in the txt file */
+		char buff1[200];
+		char buff2[19];
+		bzero(buff1, sizeof(buff1));
+		
+		strcat( buff1, "Fac: \t");
+		sprintf(buff2, "%d", message.fac);
+		strcat( buff1,buff2);
+
+		strcat( buff1, "\tUTC: \t");
+		sprintf(buff2, "%Ld", message.timestamp);
+		strcat( buff1,buff2);
+
+		strcat( buff1, "\tT: \t");
+		sprintf(buff2, "%0.2f", message.temperature);
+		strcat( buff1,buff2);
+
+		strcat( buff1, "\tP: \t");
+		sprintf(buff2, "%0.2f", message.preassure);
+		strcat( buff1,buff2);
+
+		strcat( buff1, "\tH: \t");
+		sprintf(buff2, "%0.2f", message.humidity);
+		strcat( buff1,buff2);
+
+		strcat( buff1, "\tA: \t");
+		sprintf(buff2, "%d", message.alarmOn);
+		strcat( buff1,buff2);
+
+		strcat( buff1, "\tF: \t");
+		sprintf(buff2, "%d", message.fanOn);
+		strcat( buff1,buff2);
+		strcat( buff1, "\n");
+
+		// Begining of critical section
+		pthread_mutex_lock( &mutex );
+		myfile.open ("data1.txt", std::ofstream::in | std::ofstream::out | std::ofstream::app);
+		myfile << buff1;	             
+		myfile.close();
+		pthread_mutex_unlock ( &mutex );
+		// End of critical section
 	
-	strcat( buff1, "Fac: \t");
-	sprintf(buff2, "%d", message.fac);
-	strcat( buff1,buff2);
-
-	strcat( buff1, "\tUTC: \t");
-	sprintf(buff2, "%Ld", message.timestamp);
-	strcat( buff1,buff2);
-
-	strcat( buff1, "\tT: \t");
-	sprintf(buff2, "%0.2f", message.temperature);
-	strcat( buff1,buff2);
-
-	strcat( buff1, "\tP: \t");
-	sprintf(buff2, "%0.2f", message.preassure);
-	strcat( buff1,buff2);
-
-	strcat( buff1, "\tH: \t");
-	sprintf(buff2, "%0.2f", message.humidity);
-	strcat( buff1,buff2);
-
-	strcat( buff1, "\tA: \t");
-	sprintf(buff2, "%d", message.alarmOn);
-	strcat( buff1,buff2);
-
-	strcat( buff1, "\tF: \t");
-	sprintf(buff2, "%d", message.fanOn);
-	strcat( buff1,buff2);
-	strcat( buff1, "\n");
-
-	// Begining of critical section
-        pthread_mutex_lock( &mutex );
-	myfile.open ("data1.txt", std::ofstream::in | std::ofstream::out | std::ofstream::app);
-	myfile << buff1;	             
-	myfile.close();
-	pthread_mutex_unlock ( &mutex );
-	// End of critical section
-	
-
-	//clear message buffer
-	//memset(client_message, 0, 2000);
     
     }
 
@@ -297,13 +349,8 @@ void *fac_connection_handler(void *socket_desc) {
 
 void *GUI_connection_handler(void *socket_desc){
 
-	int sock = *(int*)socket_desc;  // Socket Descriptor
-	//SensorData **data = NULL;    
-        char line[MAXCHAR];
-	char prev_line[MAXCHAR];
-	char guiMesage[200];
-        FILE *DBp;                        // Pointer to Data Base File
-
+	int sock = *(int*)socket_desc;    // Socket Descriptor
+	char commandsBuff[3];             // message to receive
 	struct timespec trigger;          // Stores next dispatch time
   	struct timespec period;           // Period of the task */
   	sem_t timer;                      // Semaphore to make the task periodic
@@ -322,18 +369,70 @@ void *GUI_connection_handler(void *socket_desc){
 	/* Infinite loop to define periodic task */
 	for (;;){
 		
-
-		pthread_mutex_lock( &mutex );
-		DBp = fopen("data1.txt", "r");
-		while (fgets(line, MAXCHAR, DBp) != NULL){
-			prev_line = line;		
-		}
-		fclose(DBp);
-		pthread_mutex_unlock ( &mutex );
-
+		
 		/* Do the job  */
-		write(sock, guiMesage, sizeof(guiMesage));
-		printf("sent\n");
+		char buff1[200];
+		char buff2[19];
+		bzero(buff1, sizeof(buff1));
+		
+		pthread_mutex_lock( &(MemFac1.MemMutex) );       // Protect the variable    		 
+		
+		sprintf(buff2, "%0.2f", MemFac1.temp[MEM_SIZE-1]);
+		strcat( buff1,buff2);
+		strcat( buff1, ",");
+		
+		sprintf(buff2, "%0.2f", MemFac1.press[MEM_SIZE-1]);
+		strcat( buff1,buff2);
+		strcat( buff1, ",");
+		
+		sprintf(buff2, "%0.2f", MemFac1.hum[MEM_SIZE-1]);
+		strcat( buff1,buff2);
+		strcat( buff1, ",");
+		
+		sprintf(buff2, "%d", MemFac1.alarmOn);
+		strcat( buff1,buff2);
+		strcat( buff1, ",");
+		
+		sprintf(buff2, "%d", MemFac1.fanOn);
+		strcat( buff1,buff2);
+		
+		pthread_mutex_unlock ( &(MemFac1.MemMutex));
+				
+		pthread_mutex_lock( &(MemFac2.MemMutex) );       // Protect the variable    		 
+		
+		strcat( buff1, ",");
+		sprintf(buff2, "%0.2f", MemFac2.temp[MEM_SIZE-1]);
+		strcat( buff1,buff2);
+		strcat( buff1, ",");
+		
+		sprintf(buff2, "%0.2f", MemFac2.press[MEM_SIZE-1]);
+		strcat( buff1,buff2);
+		strcat( buff1, ",");
+		
+		sprintf(buff2, "%0.2f", MemFac2.hum[MEM_SIZE-1]);
+		strcat( buff1,buff2);
+		strcat( buff1, ",");
+		
+		sprintf(buff2, "%d", MemFac2.alarmOn);
+		strcat( buff1,buff2);
+		strcat( buff1, ",");
+		
+		sprintf(buff2, "%d", MemFac2.fanOn);
+		strcat( buff1,buff2);
+		strcat( buff1, ",0.0,0.0,0.0,0.0,0.0,0.0"); //predictions not ready sorry
+		
+		pthread_mutex_unlock ( &(MemFac2.MemMutex));
+		
+		// Send the data to GUI	
+		write(sock, buff1, sizeof(buff1));
+		
+		// Receive the Commands
+		recv(sock , commandsBuff , sizeof(commandsBuff) , 0);
+		commands.Fan1 = (int) commandsBuff[0] - 48;
+		commands.Fan2 = (int) commandsBuff[1] - 48;
+		printf("Fan1 = %d\n",commands.Fan1);
+		printf("Fan2 = %d\n",commands.Fan2);
+		
 
 		/* Compute next task arrival */
 		add_timespec( &trigger, &trigger, &period );
