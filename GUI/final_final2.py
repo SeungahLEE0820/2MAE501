@@ -7,13 +7,9 @@ import numpy as np
 
 #Initializing coordinates
 #Factory 1
-x1 = 60
-y1 = 85
 
-xr1 = 120
-yr1 = 70
-xr2 = 240
-yr2 = 100
+Fan1 = 0
+Fan2 = 0
 
 host = '192.168.1.138'
 port = 9090
@@ -27,47 +23,13 @@ def runloop(thread_queue=None):
            data = mySocket.recv(200).decode()
            #print(data)
            thread_queue.put(data)
+           Fan3 = str(Fan1)
+           Fan4 = str(Fan2)
+           Command = Fan3+Fan4
+           print(Command)
+           ce = Command.encode()
+           mySocket.sendall(ce)
            time.sleep(2)
-
-def sendCommandON():
-##After result is produced put it in queue
-           mySocket.sendall(b'1f: 1')
-           print("FanOn")
-
-def sendCommandOFF():
-##After result is produced put it in queue
-           mySocket.sendall(b'1f: 0')
-           print("FanOFF")
-
-def sendCommandON2():
-##After result is produced put it in queue
-           mySocket.sendall(b'1r: 1')
-           print("RelayOn")
-
-def sendCommandOFF2():
-##After result is produced put it in queue
-           mySocket.sendall(b'1r: 0')
-           print("RelayOFF")
-
-def sendCommandONC():
-##After result is produced put it in queue
-           mySocket.sendall(b'2f: 1')
-           print("FanOn")
-
-def sendCommandOFFC():
-##After result is produced put it in queue
-           mySocket.sendall(b'2f: 0')
-           print("FanOFF")
-
-def sendCommandON2C():
-##After result is produced put it in queue
-           mySocket.sendall(b'2r: 1')
-           print("RelayOn")
-
-def sendCommandOFF2C():
-##After result is produced put it in queue
-           mySocket.sendall(b'2r: 0')
-           print("RelayOFF")
 
 class MainApp(threading.Thread):
 
@@ -76,10 +38,6 @@ class MainApp(threading.Thread):
       threading.Thread.__init__(self)
       self.start()
       self.thread_queue = queue.Queue()
-      self.Fann = 0
-      self.Relayy = 0
-      self.FannC = 0
-      self.RelayyC = 0
       self.root = tk.Tk()
       self.root.title("Factories 4.0")
       self.c = tk.Canvas(self.root, bg="gray92", height=480, width=900)
@@ -179,20 +137,12 @@ class MainApp(threading.Thread):
       self.Fan= tk.Button(self.root, text="Fan OFF",command=self.commandGUI)
       self.Fan.place(x=720,y=120)
 
-      self.Relay= tk.Button(self.root, text="Relay OFF",command=self.commandGUI2)
-      self.Relay.place(x=715,y=170)
 
       #Factory 2
       self.name = self.c.create_text(750, 220, font=("Helvetica", 13), text="Command to Chocolatin")
       self.Fan2= tk.Button(self.root, text="Fan OFF",command=self.commandGUIC)
       self.Fan2.place(x=720,y=240)
-
-      self.Relay2= tk.Button(self.root, text="Relay OFF",command=self.commandGUI2C)
-      self.Relay2.place(x=715,y=290)
-      
-
-       
-      
+     
       self.c.pack()
       #self.root.after(100, self.listen_for_result)  
       self.root.mainloop()
@@ -211,7 +161,6 @@ class MainApp(threading.Thread):
 #Check if there is something in the queue
       while True:
           if queue:
-              print("There is a socket")
               self.res1 = self.thread_queue.get(True)
               print(self.res1)
               x = self.res1.split(",")
@@ -249,7 +198,7 @@ class MainApp(threading.Thread):
                       self.F2.config(text = "Fan OFF")
                   else:
                       self.F2.config(text = "Fan ON", bg="red3")
-              time.sleep(2)           
+              time.sleep(1)           
           else:
               print("Problems with the queue")
 
@@ -258,54 +207,26 @@ class MainApp(threading.Thread):
        self.new_thread3.end()
 
    def commandGUI (self):
-      if self.Fann == 1:
-          self.Fan.config(text = "Fan OFF")
-          self.new_thread2 = threading.Thread(target=sendCommandOFF)
-          self.new_thread2.start()
-          self.Fann = 0
-      else:
+      global Fan1
+
+      if Fan1 == 0:
           self.Fan.config(text = "Fan ON")
-          self.new_thread2 = threading.Thread(target=sendCommandON)
-          self.new_thread2.start()
-          self.Fann += 1
-
-
-   def commandGUI2 (self):
-      if self.Relayy == 1:
-          self.Relay.config(text = "Relay OFF")
-          self.new_thread4 = threading.Thread(target=sendCommandOFF2C)
-          self.new_thread4.start()
-          self.Relayy = 0
+          Fan1 += 1
       else:
-          self.Relay.config(text = "Relay ON")
-          self.new_thread4 = threading.Thread(target=sendCommandON2C)
-          self.new_thread4.start()
-          self.Relayy += 1
+          self.Fan.config(text = "Fan OFF")
+          Fan1 = 0
+
 
    def commandGUIC (self):
-      if self.FannC == 1:
+      global Fan2
+
+      if Fan2 == 1:
           self.Fan2.config(text = "Fan OFF")
-          self.new_thread2 = threading.Thread(target=sendCommandOFFC)
-          self.new_thread2.start()
-          self.FannC = 0
+          Fan2 = 0
       else:
           self.Fan2.config(text = "Fan ON")
-          self.new_thread2 = threading.Thread(target=sendCommandONC)
-          self.new_thread2.start()
-          self.FannC += 1
+          Fan2 += 1
 
-
-   def commandGUI2C (self):
-      if self.RelayyC == 1:
-          self.Relay2.config(text = "Relay OFF")
-          self.new_thread4 = threading.Thread(target=sendCommandOFF2C)
-          self.new_thread4.start()
-          self.RelayyC = 0
-      else:
-          self.Relay2.config(text = "Relay ON")
-          self.new_thread4 = threading.Thread(target=sendCommandON2C)
-          self.new_thread4.start()
-          self.RelayyC += 1
 
 
 if __name__ == "__main__":
