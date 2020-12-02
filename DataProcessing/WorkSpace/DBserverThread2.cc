@@ -90,6 +90,8 @@ GUIcommands commands;
 
 void *fac_connection_handler(void *);
 void *GUI_connection_handler(void *);
+void build_GUI_message(char buff1[200], TempMem Mem1, TempMem Mem2);
+void build_Txt_line(char buff1[200], struct data_receive * msg);
 
 void *factoryCommunication (void *){
    
@@ -252,10 +254,10 @@ void *fac_connection_handler(void *socket_desc) {
 		sprintf(buff3, "%d", commands.Fan1);
 		strcat( command2fac, buff3);
 		sprintf(buff3, "%d", MemFac1.alarmOn);
-	    strcat( command2fac, buff3);
-	    sprintf(buff3, "%d", commands.Fan2);
-	    strcat( command2fac, buff3);
-	    sprintf(buff3, "%d", MemFac2.alarmOn);
+	    	strcat( command2fac, buff3);
+	    	sprintf(buff3, "%d", commands.Fan2);
+	    	strcat( command2fac, buff3);
+	    	sprintf(buff3, "%d", MemFac2.alarmOn);
 		strcat( command2fac, buff3);
 		write(sock, command2fac, sizeof(command2fac));
 		
@@ -287,37 +289,8 @@ void *fac_connection_handler(void *socket_desc) {
 
 		/* Build the message that will be stored in the txt file */
 		char buff1[200];
-		char buff2[19];
 		bzero(buff1, sizeof(buff1));
-		
-		strcat( buff1, "Fac: \t");
-		sprintf(buff2, "%d", message.fac);
-		strcat( buff1,buff2);
-
-		strcat( buff1, "\tUTC: \t");
-		sprintf(buff2, "%Ld", message.timestamp);
-		strcat( buff1,buff2);
-
-		strcat( buff1, "\tT: \t");
-		sprintf(buff2, "%0.2f", message.temperature);
-		strcat( buff1,buff2);
-
-		strcat( buff1, "\tP: \t");
-		sprintf(buff2, "%0.2f", message.preassure);
-		strcat( buff1,buff2);
-
-		strcat( buff1, "\tH: \t");
-		sprintf(buff2, "%0.2f", message.humidity);
-		strcat( buff1,buff2);
-
-		strcat( buff1, "\tA: \t");
-		sprintf(buff2, "%d", message.alarmOn);
-		strcat( buff1,buff2);
-
-		strcat( buff1, "\tF: \t");
-		sprintf(buff2, "%d", message.fanOn);
-		strcat( buff1,buff2);
-		strcat( buff1, "\n");
+		build_Txt_line(buff1, &message);
 
 		// Begining of critical section
 		pthread_mutex_lock( &mutex );
@@ -350,6 +323,7 @@ void *GUI_connection_handler(void *socket_desc){
 
 	int sock = *(int*)socket_desc;    // Socket Descriptor
 	char commandsBuff[3];             // message to receive
+	char buff1[200];                  // message to send
 	struct timespec trigger;          // Stores next dispatch time
   	struct timespec period;           // Period of the task */
   	sem_t timer;                      // Semaphore to make the task periodic
@@ -368,71 +342,19 @@ void *GUI_connection_handler(void *socket_desc){
 	/* Infinite loop to define periodic task */
 	for (;;){
 		
-		
 		/* Do the job  */
-		char buff1[200];
-		char buff2[19];
+		// First part: Send the data to GUI
 		bzero(buff1, sizeof(buff1));
-		
-		pthread_mutex_lock( &(MemFac1.MemMutex) );       // Protect the variable    		 
-		
-		sprintf(buff2, "%0.2f", MemFac1.temp[MEM_SIZE-1]);
-		strcat( buff1,buff2);
-		strcat( buff1, ",");
-		
-		sprintf(buff2, "%0.2f", MemFac1.press[MEM_SIZE-1]);
-		strcat( buff1,buff2);
-		strcat( buff1, ",");
-		
-		sprintf(buff2, "%0.2f", MemFac1.hum[MEM_SIZE-1]);
-		strcat( buff1,buff2);
-		strcat( buff1, ",");
-		
-		sprintf(buff2, "%d", MemFac1.alarmOn);
-		strcat( buff1,buff2);
-		strcat( buff1, ",");
-		
-		sprintf(buff2, "%d", MemFac1.fanOn);
-		strcat( buff1,buff2);
-		
-		pthread_mutex_unlock ( &(MemFac1.MemMutex));
-				
-		pthread_mutex_lock( &(MemFac2.MemMutex) );       // Protect the variable    		 
-		
-		strcat( buff1, ",");
-		sprintf(buff2, "%0.2f", MemFac2.temp[MEM_SIZE-1]);
-		strcat( buff1,buff2);
-		strcat( buff1, ",");
-		
-		sprintf(buff2, "%0.2f", MemFac2.press[MEM_SIZE-1]);
-		strcat( buff1,buff2);
-		strcat( buff1, ",");
-		
-		sprintf(buff2, "%0.2f", MemFac2.hum[MEM_SIZE-1]);
-		strcat( buff1,buff2);
-		strcat( buff1, ",");
-		
-		sprintf(buff2, "%d", MemFac2.alarmOn);
-		strcat( buff1,buff2);
-		strcat( buff1, ",");
-		
-		sprintf(buff2, "%d", MemFac2.fanOn);
-		strcat( buff1,buff2);
-		strcat( buff1, ",0.0,0.0,0.0,0.0,0.0,0.0"); //predictions not ready sorry
-		
-		pthread_mutex_unlock ( &(MemFac2.MemMutex));
-		
-		// Send the data to GUI	
+		build_GUI_message(buff1, MemFac1, MemFac2);
 		write(sock, buff1, sizeof(buff1));
 		
-		// Receive the Commands
+		// Second part: Receive the Commands
 		recv(sock , commandsBuff , sizeof(commandsBuff) , 0);
 		commands.Fan1 = (int) commandsBuff[0] - 48;
 		commands.Fan2 = (int) commandsBuff[1] - 48;
-		printf("Fan1 = %d\n",commands.Fan1);
-		printf("Fan2 = %d\n",commands.Fan2);
+			//printf("Fan1 = %d\n",commands.Fan1);
+			//printf("Fan2 = %d\n",commands.Fan2);
 		
-
 		/* Compute next task arrival */
 		add_timespec( &trigger, &trigger, &period );
 
@@ -442,4 +364,98 @@ void *GUI_connection_handler(void *socket_desc){
 	}
 
 	return 0;
+}
+
+void build_Txt_line(char buff1[200], struct data_receive * msg){
+
+	char buff2[19];
+	strcat( buff1, "Fac: \t");
+	sprintf(buff2, "%d", msg->fac);
+	strcat( buff1,buff2);
+	strcat( buff1, "\tUTC: \t");
+	sprintf(buff2, "%Ld", msg->timestamp);
+	strcat( buff1,buff2);
+	strcat( buff1, "\tT: \t");
+	sprintf(buff2, "%0.2f", msg->temperature);
+	strcat( buff1,buff2);
+	strcat( buff1, "\tP: \t");
+	sprintf(buff2, "%0.2f", msg->preassure);
+	strcat( buff1,buff2);
+	strcat( buff1, "\tH: \t");
+	sprintf(buff2, "%0.2f", msg->humidity);
+	strcat( buff1,buff2);
+	strcat( buff1, "\tA: \t");
+	sprintf(buff2, "%d", msg->alarmOn);
+	strcat( buff1,buff2);
+	strcat( buff1, "\tF: \t");
+	sprintf(buff2, "%d", msg->fanOn);
+	strcat( buff1,buff2);
+	strcat( buff1, "\n");
+
+	return ;
+}
+
+
+void build_GUI_message(char buff1[200], TempMem Mem1, TempMem Mem2){
+
+	char buff2[19];
+	
+	pthread_mutex_lock( &(Mem1.MemMutex) );            // Protect the variable
+	pthread_mutex_lock( &(Mem2.MemMutex) );             // Protect the variable      		 
+	
+	sprintf(buff2, "%0.2f", Mem1.temp[MEM_SIZE-1]);    // Append Temperature Fac1
+	strcat( buff1,buff2);
+	strcat( buff1, ",");
+	sprintf(buff2, "%0.2f", Mem1.press[MEM_SIZE-1]);   // Append Pressure Fac1
+	strcat( buff1,buff2);
+	strcat( buff1, ",");
+	sprintf(buff2, "%0.2f", Mem1.hum[MEM_SIZE-1]);     // append Humidity Fac1
+	strcat( buff1,buff2);
+	strcat( buff1, ",");
+	sprintf(buff2, "%d", Mem1.alarmOn);                // Append alarm Fac1
+	strcat( buff1,buff2);
+	strcat( buff1, ",");
+	sprintf(buff2, "%d", Mem1.fanOn);                  // Append fan Fac1
+	strcat( buff1,buff2);
+	strcat( buff1, ",");				
+	sprintf(buff2, "%0.2f", Mem2.temp[MEM_SIZE-1]);    // Append Temperature Fac2
+	strcat( buff1,buff2);
+	strcat( buff1, ",");
+	sprintf(buff2, "%0.2f", Mem2.press[MEM_SIZE-1]);   // Append Temperarute Fac2
+	strcat( buff1,buff2);
+	strcat( buff1, ",");		
+	sprintf(buff2, "%0.2f", Mem2.hum[MEM_SIZE-1]);     // Append Humidity Fac1
+	strcat( buff1,buff2);
+	strcat( buff1, ",");
+	sprintf(buff2, "%d", Mem2.alarmOn);                // Append alarm Fac2
+	strcat( buff1,buff2);
+	strcat( buff1, ",");
+	sprintf(buff2, "%d", Mem2.fanOn);                  // Append fan Fac2
+	strcat( buff1,buff2);
+	strcat( buff1, ",");
+	sprintf(buff2, "%0.2f", Pred(&(Mem1.time[0]), &(Mem1.temp[0]));
+	strcat( buff1,buff2);
+	strcat( buff1, ",");
+	sprintf(buff2, "%0.2f", Pred(&(Mem1.time[0]), &(Mem1.press[0]));
+	strcat( buff1,buff2);
+	strcat( buff1, ",");
+	sprintf(buff2, "%0.2f", Pred(&(Mem1.time[0]), &(Mem1.hum[0]));
+	strcat( buff1,buff2);
+	strcat( buff1, ",");
+	sprintf(buff2, "%0.2f", Pred(&(Mem2.time[0]), &(Mem2.temp[0]));
+	strcat( buff1,buff2);
+	strcat( buff1, ",");
+	sprintf(buff2, "%0.2f", Pred(&(Mem2.time[0]), &(Mem2.press[0]));
+	strcat( buff1,buff2);
+	strcat( buff1, ",");
+	sprintf(buff2, "%0.2f", Pred(&(Mem2.time[0]), &(Mem2.hum[0]));
+	strcat( buff1,buff2);
+	strcat( buff1, "\0");
+	
+	
+	pthread_mutex_unlock ( &(Mem2.MemMutex));
+	pthread_mutex_unlock ( &(Mem1.MemMutex));
+	
+	return ;
+
 }
