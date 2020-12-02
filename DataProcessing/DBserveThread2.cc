@@ -68,6 +68,9 @@ struct data_receive{
 };
 
 #include <time.h>
+
+/*add_timespec: add two timespecs. the function is used to estimate the next cycle time. */
+/* Timespec: Structure holding an interval broken down into seconds and nanoseconds.*/
 void add_timespec (struct timespec *s,
                    const struct timespec *t1,
                    const struct timespec *t2)
@@ -139,6 +142,7 @@ void *factoryCommunication (void *){
     pthread_t thread_id;
 	
     /* Create a thread for each new connection */
+    /* Accept a connection on a socket */
     while( (client_sock = accept(socket_desc1, (struct sockaddr *)&client, (socklen_t*)&c1)) ){
 
 	char *ip = inet_ntoa(client.sin_addr);
@@ -223,6 +227,7 @@ int main(int argc , char *argv[]){
 
 
 	/* Bind the socket and Check possible errors */
+    /* bind: allocate a port number to a socket*/
 	if( bind(socket_desc1, (struct sockaddr *)&server1 , sizeof(server1)) < 0){
 		perror("First bind failed. Error"); 
 		return 0;
@@ -253,6 +258,9 @@ int main(int argc , char *argv[]){
 		puts("Second bind done ");
 	}
 	
+    /*listen: wait for a connection from a client*/
+    /* second parameter 3 : maximum length to which the queue of pending connections)*/
+    /*listen is for waiting, not for data transmission*/
 	listen(socket_desc2 , 3);
 	
 	
