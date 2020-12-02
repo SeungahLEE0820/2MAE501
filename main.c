@@ -16,7 +16,12 @@
 #define PORT 8080 
 #define SA struct sockaddr
 
+// Identifies the ID of the factory
 #define FAC 1
+
+// GPIO pins used for the LED and the relay
+#define LED 1		// Simulate the alarm
+#define RELAY 0		// Simulate the fan
 
 //Default write it to the register in one time
 #define USESPISINGLEREADWRITE 0
@@ -24,13 +29,19 @@
 //Raspberry 3B+ platform's default SPI channel
 #define channel 0 
 
+// Struct used by each thread reading its sensor
 struct input{
+  /*! Sensor's predefined structure */
   struct bme280_dev dev; 
+  /*! ID given to the thread*/
   int index;
 };
 
+// Struct used by this program to communicate data from the factory to the data management
 struct send_data {
+	/*! Factory identifier */
 	int fac;
+	/*! Time of data */
 	long long int timeStamp; 
 	/*! Compensated pressure */
 	double pressure;
@@ -38,17 +49,56 @@ struct send_data {
 	double temperature;
 	/*! Compensated humidity */
 	double humidity;
+	/*! Alarm ON/OFF - simulated as a LED */
+	int alarmON : 1;
+	/*! Fan ON/OFF - simulated as a relay */
+	int fanON : 1;
 };
 
-#define n_pin 2 //3
-int PINS[] = {27,28};//,29};
+// Number of sersors to be read and pins used for them
+#define n_pin 3
+int PINS[] = {27,28,29};
+
+// Threshold for temperature, pressure and humidity
 float low_t = 0, high_t =40, low_p = 500, high_p =2000, low_h = 20, high_h =80;
-int priority = 5;
+
+// Priority given to the sensor reading task
+int priority = 50;
+
+// Array of semaphores used to check if all sensors have been read (checked by the "merge_and_send" task)
 sem_t synchro[n_pin];
+
+// Array of sensor's data structure
 struct bme280_data comp_data[n_pin];
+
 int sockfd = -1;
 
+// The struct to send data is protected by a mutex as it is used by two independent threads
+struct send_data data;
+pthread_mutex_t mutex_data;
 
+
+/* Sporadic task used to simulate the alarm through a blinkg LED */
+void* LED_blink (void* none)
+{
+  printf ("Alarm activated\n") ;
+
+  pinMode (LED, OUTPUT) ;
+  for (int i = 0; i < 20; i++)
+  {
+    digitalWrite (LED, HIGH) ; // On
+    delay (500) ; // mS
+    digitalWrite (LED, LOW) ; // Off
+    delay (500) ;
+  }
+  pthread_mutex_lock(&mutex_data);
+  data.alarmON = 0;
+  pthread_mutex_unlock(&mutex_data);
+  
+  return NULL ;
+}
+
+/* Initialize the TCP connection with the data management server */
 int init_connection() 
 { 
 	int sockfd; 
@@ -66,7 +116,7 @@ int init_connection()
 
 	// assign IP, PORT 
 	servaddr.sin_family = AF_INET; 
-	servaddr.sin_addr.s_addr = inet_addr("192.168.1.220"); 
+	servaddr.sin_addr.s_addr = inet_addr("192.168.43.243"); 
 	servaddr.sin_port = htons(PORT); 
 
 	// connect the client socket to server socket 
@@ -78,6 +128,53 @@ int init_connection()
 		printf("connected to the server..\n"); 
 
 	return sockfd;
+}
+
+/* Function listening for commands from the data management server */
+void* receive_command(void* none) {
+  
+  int read_size;
+  // The data management sends commands as a string of integer values
+  // As only two factories are considered the string has 4 useful chars and one '\n':
+  // "factory_1_fan factory_1_alarm factory_2_fan factory_2_alarm \n"
+  char command[5];
+  
+  // Thread to be used to let the alarm blink in case of necessity
+  pthread_t t_alarm;
+  pthread_attr_t tattr1;
+  struct sched_param param1;
+  pthread_attr_init (&tattr1);
+  pthread_attr_getschedparam (&tattr1, &param1);
+  param1.sched_priority = 10;
+  pthread_attr_setschedparam (&tattr1, &param1);
+  
+  while( (read_size = recv(sockfd , (void*) &command , 5*sizeof(char) , 0)) > 0 )
+  {
+    pthread_mutex_lock (&mutex_data);
+    if ((int) (command[1] - 48) || (int) (command[3] - 48)) {	// If the alarm is running in one of the factories and it is not
+      if (data.alarmON == 0) {					// already running in the current one, activates the thread (48 is the ASCII of '0')
+	data.alarmON = 1;
+	pthread_create(&t_alarm, &tattr1, LED_blink, NULL);
+      }
+    }
+    if ((int) (command[FAC * 2 - 2] - 48)) {			// Activates the fan of the command is received and the fan is not already ON
+      printf("Relay ON\n");					//(FAN*2 - 2 allows to select the right position in the string by using the factory ID)
+      if (!data.fanON) {
+	digitalWrite (RELAY, LOW);
+	data.fanON = 1;
+      }
+    }
+    else {
+      printf("Relay OFF\n");
+      if (data.fanON) {
+	digitalWrite (RELAY, HIGH);
+	data.fanON = 0;
+      }
+    }
+    
+    pthread_mutex_unlock (&mutex_data);
+  }
+  return NULL;
 }
 
 
@@ -154,6 +251,7 @@ void print_sensor_data(struct bme280_data *comp_data) {
 }
 
 
+/* Funtion used to add two time structure - useful for period tasks */
 void add_timespec (struct timespec *s, const struct timespec *t1, const struct timespec *t2) {
   s->tv_sec  = t1->tv_sec  + t2->tv_sec;
   s->tv_nsec = t1->tv_nsec + t2->tv_nsec;
@@ -161,7 +259,7 @@ void add_timespec (struct timespec *s, const struct timespec *t1, const struct t
   s->tv_nsec %= 1000000000;
 }
 
-
+/* Periodic task reading sensor data */
 void* stream_sensor_data_normal_mode(void* inputs) {
 
   struct input* in = (struct input*) inputs;
@@ -191,8 +289,9 @@ void* stream_sensor_data_normal_mode(void* inputs) {
   struct bme280_data temp_data;
   int status;
 
+  // Defines the period of the current task
   period.tv_nsec = 0 * 1000 * 1000;
-  period.tv_sec  = 1;
+  period.tv_sec  = 2;
   /* Not shared among processes and already allocated semaphore */
   sem_init(&timer, 0, 0);
   clock_gettime(CLOCK_REALTIME, &trigger);  
@@ -203,14 +302,13 @@ void* stream_sensor_data_normal_mode(void* inputs) {
     
     if(!status) {
       rslt = bme280_get_sensor_data(BME280_ALL, comp_data + in->index, &(in->dev));
-      // CHECK FOR ALARM
-      print_sensor_data(comp_data + in->index);
+      //print_sensor_data(comp_data + in->index);
       
-      sem_post(&synchro[in->index]);
+      sem_post(&synchro[in->index]);	// Semaphore increased to communicate the reading of a specific sensor
     }
     else {
-      rslt = bme280_get_sensor_data(BME280_ALL, &temp_data, &(in->dev));
-      // CHECK FOR ALARM
+      rslt = bme280_get_sensor_data(BME280_ALL, &temp_data, &(in->dev));    // If the sensor was already read, the data is stored in another struct,
+									    // so that the "merge_and_send" would read data of the same timestamp
     }
 
     add_timespec(&trigger, &trigger, &period);
@@ -223,27 +321,36 @@ void* stream_sensor_data_normal_mode(void* inputs) {
   return NULL;
 }
 
-
+/* Task waiting for sensor data to reach a consensus and send information to the server */
 void* merge_and_send(void* no_input) {
   int status[n_pin];
   int size;
   float temperature[n_pin], pressure[n_pin], humidity[n_pin];
-  struct send_data data;
   
-  struct timespec timestamp;                              /* Period of the task */
+  pthread_t t_alarm;
+  pthread_attr_t tattr1;
+  struct sched_param param1;
+  pthread_attr_init (&tattr1);
+  pthread_attr_getschedparam (&tattr1, &param1);
+  param1.sched_priority = 10;
+  pthread_attr_setschedparam (&tattr1, &param1);
+  
+  struct timespec timestamp;
+  
+  pthread_mutex_init(&mutex_data, NULL);
 	
   while(1) {
     for(int i=0; i<n_pin; i++) {
-      //status[i] = sem_timedwait (&synchro[i], &period);
       status[i] = sem_wait(&synchro[i]);
+      /*status[i] = sem_timedwait (&synchro[i], &period);
       if(status[i]) {
 	printf("Sensor in PIN %d unreacheable, alarm sent\n", PINS[i]);
 	// SEND ALARM
-      }
+      }*/
     }
     
     size = 0;
-    for(int i=0; i<n_pin; i++) {
+    for(int i=0; i<n_pin; i++) {			// Read sensors' data, no need for mutex as it is not modified until this thread ends its cycle
       if(!status[i]) {
         temperature[i] = comp_data[i].temperature;
 	pressure[i] = comp_data[i].pressure/100;
@@ -251,18 +358,26 @@ void* merge_and_send(void* no_input) {
 	size ++;
       }
     }
+    pthread_mutex_lock (&mutex_data);
     data.fac = FAC;
-    data.temperature = merge(temperature, size, low_t, high_t, 0.5);
+    data.temperature = merge(temperature, size, low_t, high_t, 0.5);	// Function called to reach a consensus among the different values measured
     data.pressure = merge(pressure,    size, low_p, high_p, 5.0);
     data.humidity = merge(humidity,    size, low_h, high_h, 1.0);
     
     clock_gettime(CLOCK_REALTIME, &timestamp); 
     
-    data.timeStamp = timestamp.tv_nsec * 1000 * 1000 + timestamp.tv_sec * 1000;
+    data.timeStamp = timestamp.tv_sec;
     
-    printf("FINAL temperature:%f*C   pressure:%fhPa   humidity:%f%%\r\n", data.temperature, data.pressure, data.humidity);
+    printf("FINAL temperature:%f*C   pressure:%fhPa   humidity:%f%% \n  alarm: %d    fan: %d\n", data.temperature, data.pressure, data.humidity, data.alarmON, data.fanON);
     
     write(sockfd, &data, sizeof(struct send_data));
+    
+    if (data.alarmON != 1 && (data.temperature < low_t || data.temperature > high_t || data.pressure < low_p || data.pressure > high_p || data.humidity < low_h || data.humidity > high_h)) {
+      data.alarmON = 1;
+      pthread_create(&t_alarm, &tattr1, LED_blink, NULL);	// If the alarm is not already on and the consensus of measurement is out of the thresholds, the alarm is triggered
+    }
+    
+    pthread_mutex_unlock (&mutex_data);
   
   }
 
@@ -273,10 +388,12 @@ void* merge_and_send(void* no_input) {
 int main(int argc, char* argv[]) {
 
   int8_t rslt;
+  /* Define the variable for the sensors reading threads */
   struct input inputs[n_pin];
   pthread_t tid[n_pin];
   pthread_attr_t tattr[n_pin];
   struct sched_param param[n_pin];
+  
   
   sockfd = init_connection();
   if(sockfd == -1)
@@ -299,7 +416,7 @@ int main(int argc, char* argv[]) {
   }
   
 
-  SPI_BME280_CS_Low();  //once pull down means use SPI Interface
+  SPI_BME280_CS_Low();  // once pull down means use SPI Interface
   
   wiringPiSPISetup(channel,2000000);
 
@@ -324,9 +441,18 @@ int main(int argc, char* argv[]) {
   struct sched_param param1;
   pthread_attr_init (&tattr1);
   pthread_attr_getschedparam (&tattr1, &param1);
-  param1.sched_priority = 20;
+  param1.sched_priority = 60;
   pthread_attr_setschedparam (&tattr1, &param1);
   pthread_create(&T3, &tattr1, merge_and_send, NULL);
+  
+  pthread_t T4;
+  pthread_attr_t tattr2;
+  struct sched_param param2;
+  pthread_attr_init (&tattr2);
+  pthread_attr_getschedparam (&tattr2, &param2);
+  param1.sched_priority = 60;
+  pthread_attr_setschedparam (&tattr2, &param2);
+  pthread_create(&T4, &tattr2, receive_command, NULL);
 
   pthread_join(tid[0], NULL);
   
