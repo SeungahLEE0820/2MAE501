@@ -21,9 +21,6 @@
 #define MAX 50 
    
 
-
-
-
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_sf_bessel.h>
 #include <gsl/gsl_math.h>
@@ -39,23 +36,13 @@
 #define LEN 5   
 double c000, c111, cov00, cov01, cov11, sumsq;
 
-
-
-
-
 double Pred(double time1[],double temp1[]){
-  double TEMP_P;
- 
- 
-   double t[5]={1,2,3,4,5};
-  gsl_fit_linear(t,1,temp1,1,LEN,&c000,&c111,&cov00,&cov01,&cov11,&sumsq);
-  TEMP_P=c000+c111*(t[4]+5);
-  
- 
-return TEMP_P;
+    double TEMP_P;
+    double t[5]={1,2,3,4,5};
+    gsl_fit_linear(t,1,temp1,1,LEN,&c000,&c111,&cov00,&cov01,&cov11,&sumsq);
+    TEMP_P=c000+c111*(t[4]+5);
+    return TEMP_P;
 }
-
-
 
 struct data_receive{
 	int fac;
@@ -71,10 +58,7 @@ struct data_receive{
 
 /*add_timespec: add two timespecs. the function is used to estimate the next cycle time. */
 /* Timespec: Structure holding an interval broken down into seconds and nanoseconds.*/
-void add_timespec (struct timespec *s,
-                   const struct timespec *t1,
-                   const struct timespec *t2)
-{
+void add_timespec (struct timespec *s, const struct timespec *t1, const struct timespec *t2){
   s->tv_sec  = t1->tv_sec  + t2->tv_sec;
   s->tv_nsec = t1->tv_nsec + t2->tv_nsec;
   s->tv_sec += s->tv_nsec/1000000000;
@@ -82,10 +66,8 @@ void add_timespec (struct timespec *s,
 }
 
 
-
 /* Configure mutex */
 pthread_mutex_t mutex;
-
 
 /* Global variables for socket communication */
 int socket_desc1,socket_desc2, client_sock , c1, c2;
@@ -101,7 +83,7 @@ struct TempMem {
 	double press[MEM_SIZE] = {0};
 	double hum[MEM_SIZE] = {0};
 	int alarmOn:1;
-        int fanOn:1;
+    int fanOn:1;
 };
 
 
@@ -109,13 +91,10 @@ TempMem MemFac1;
 TempMem MemFac2;
 
 void swip(double *array, double m){
-
-	for (int i = 0; i < (MEM_SIZE-1); i++) {
-
-		array[i] = array[i+1];
-	}
-
-	array[MEM_SIZE-1] = m;
+    for (int i = 0; i < (MEM_SIZE-1); i++) {
+        array[i] = array[i+1];
+    }
+    array[MEM_SIZE-1] = m;
 }
 
 typedef struct GUIcommands GUIcommands;
@@ -125,7 +104,6 @@ struct GUIcommands{
 };
 
 GUIcommands commands;
-
 
 void *fac_connection_handler(void *);
 void *GUI_connection_handler(void *);
@@ -144,33 +122,24 @@ void *factoryCommunication (void *){
     /* Create a thread for each new connection */
     /* Accept a connection on a socket */
     while( (client_sock = accept(socket_desc1, (struct sockaddr *)&client, (socklen_t*)&c1)) ){
-
-	char *ip = inet_ntoa(client.sin_addr);
+        char *ip = inet_ntoa(client.sin_addr);
         int port= htons (client.sin_port);
-
         printf("Connection accepted from %s %d\n", ip, port);
 
-        
+        /*creat a thread of the factory connection handler which will be allocated to the factory 1 and 2 */
         if( pthread_create( &thread_id , NULL ,  fac_connection_handler , (void*) &client_sock) < 0) {
-            
-	    perror("could not create thread");
+            perror("could not create thread");
             return 0;
-
-        } else { 
-
-	    puts("Handler assigned");
+            
+        }
+        else {
+            puts("Handler assigned");
         }                     
     }
-     
     if (client_sock < 0){
-
         perror("accept failed");
         return 0;
     }
-
-
-
-
 }
 
 void *GUICommunication (void *){
@@ -184,21 +153,17 @@ void *GUICommunication (void *){
 
 	/* Create a thread for each new connection */
 	while( (client_sock = accept(socket_desc2, (struct sockaddr *)&client, (socklen_t*)&c2)) ){
-
-		char *ip = inet_ntoa(client.sin_addr);
+        char *ip = inet_ntoa(client.sin_addr);
 		int port= htons (client.sin_port);
-
 		printf("Connection accepted from %s %d\n", ip, port);
 
-
+        /*creat a thread of the GUI connection handler, considering the case that a human turn off the GUI. This prevent an existing thread from stopping all system */
 		if( pthread_create( &thread_id , NULL ,  GUI_connection_handler , (void*) &client_sock) < 0) {
-
-			perror("could not create thread");
+            perror("could not create thread");
 		return 0;
-
-		} else { 
-
-			puts("GUI Handler assigned");
+		}
+        else {
+            puts("GUI Handler assigned");
 		}                     
 	}
 
@@ -216,7 +181,8 @@ int main(int argc , char *argv[]){
 	socket_desc1 = socket(AF_INET , SOCK_STREAM , 0);
 	if (socket_desc1 == -1){
 		printf("Could not create socket");
-	}else{
+	}
+    else {
 		puts("Socket created");
 	}
 	
@@ -231,17 +197,20 @@ int main(int argc , char *argv[]){
 	if( bind(socket_desc1, (struct sockaddr *)&server1 , sizeof(server1)) < 0){
 		perror("First bind failed. Error"); 
 		return 0;
-	} else {
+	}
+    else {
 		puts("First bind done");
 	}
 	
+    /*listen: wait for a connection from a client*/
 	listen(socket_desc1 , 3);
 
 	/* Create socket with the Second port */
 	socket_desc2 = socket(AF_INET , SOCK_STREAM , 0);
 	if (socket_desc2 == -1){
 		printf("Could not create socket");
-	}else{
+	}
+    else{
 		puts("Socket2 created");
 	}
 
@@ -254,7 +223,8 @@ int main(int argc , char *argv[]){
 	if( bind(socket_desc2, (struct sockaddr *)&server2 , sizeof(server2)) < 0){
 		perror("Second bind failed. Error"); 
 		return 0;
-	} else {
+	}
+    else {
 		puts("Second bind done ");
 	}
 	
@@ -263,14 +233,17 @@ int main(int argc , char *argv[]){
     /*listen is for waiting, not for data transmission*/
 	listen(socket_desc2 , 3);
 	
-	
 	/* LAUNCH THE THREADS THAT MANAGE COMMUNICATIONS */
 	pthread_t th_port1, th_port2;
+    /* initialize a mutex*/
 	pthread_mutex_init ( &mutex , NULL);
-	 	          
+	 	       
+    /*create threads for a factory communication and a GUI communication*/
+    /*different ports are allocated to factroy comm and GUI comm*/
 	pthread_create ( &th_port1, NULL, factoryCommunication, NULL);
 	pthread_create ( &th_port2, NULL, GUICommunication, NULL);
 
+    /*exit the thread*/
 	pthread_join (th_port1, NULL);
 
 	return 0;
@@ -278,7 +251,7 @@ int main(int argc , char *argv[]){
 
 
 /*
- * This will handle connection for each client
+ * This will handle connection for each client (factory 1 and factory2)
  * */
 void *fac_connection_handler(void *socket_desc) {
     
@@ -293,31 +266,40 @@ void *fac_connection_handler(void *socket_desc) {
 	for(;;){
 		
 		// Build the string to send the information about Fan and Alarms
-		bzero(command2fac, sizeof(command2fac));
+		/*initialize a buffer with 0*/
+        bzero(command2fac, sizeof(command2fac));
+        
+        /* In the beginning, command is filled with 0. After GUI sends a command, commands are filled with proper values*/
+        /* using sprintf, put fan and alarm status of the factory 1 and factory2 to a temperal buffer*/
+        /* using strcat, put the buffer contents into the char array command2fac*/
 		sprintf(buff3, "%d", commands.Fan1);
 		strcat( command2fac, buff3);
 		sprintf(buff3, "%d", MemFac1.alarmOn);
-	    	strcat( command2fac, buff3);
-	    	sprintf(buff3, "%d", commands.Fan2);
-	    	strcat( command2fac, buff3);
-	    	sprintf(buff3, "%d", MemFac2.alarmOn);
+        strcat( command2fac, buff3);
+        sprintf(buff3, "%d", commands.Fan2);
+        strcat( command2fac, buff3);
+        sprintf(buff3, "%d", MemFac2.alarmOn);
 		strcat( command2fac, buff3);
+        /*deliver a command from GUI to factories*/
 		write(sock, command2fac, sizeof(command2fac));
 		
 		// Wait for the reply
 		read(sock , (void*) &message , sizeof(struct data_receive));
 		/* Update the temporal memory */
+        /*if the data is from factory 1, put the data into the message */
 		if (message.fac == 1){
-			
+            
+            /* use mutex in order to protect the data*/
+            /*using swip, the data is updated*/
 			pthread_mutex_lock( &(MemFac1.MemMutex) );       // Protect the variable
 			swip(&(MemFac1.temp[0]), message.temperature);   // Update temperature buffer
 			swip(&(MemFac1.press[0]), message.preassure);    // Update pressure buffer
 			swip(&(MemFac1.hum[0]), message.humidity);       // Update humidity buffer
 			MemFac1.alarmOn = message.alarmOn;               // Current state of Alarm
-			MemFac1.fanOn = message.fanOn;			 // Current state of Actuator
+			MemFac1.fanOn = message.fanOn;			         // Current state of Actuator
 			pthread_mutex_unlock ( &(MemFac1.MemMutex));     // End of critical Section
 			
-			
+        /*if the data is from factory 2, put the data into the message */
 		} else if (message.fac == 2){
 
 			pthread_mutex_lock( &(MemFac2.MemMutex) );       // Protect the variable
@@ -346,17 +328,15 @@ void *fac_connection_handler(void *socket_desc) {
     
     }
 
-    if(read_size == 0)
-    {
+    /* if data coming to the server is 0, it means the client is disconnected. So, flush the buffer*/
+    if(read_size == 0) {
         puts("Client disconnected");
         fflush(stdout);
     }
-    else if(read_size == -1)
-    {
+    else if(read_size == -1) {
         perror("recv failed");
     }
-
-         
+    
     return 0;
 } 
 
@@ -395,13 +375,11 @@ void *GUI_connection_handler(void *socket_desc){
 		recv(sock , commandsBuff , sizeof(commandsBuff) , 0);
 		commands.Fan1 = (int) commandsBuff[0] - 48;
 		commands.Fan2 = (int) commandsBuff[1] - 48;
-			//printf("Fan1 = %d\n",commands.Fan1);
-			//printf("Fan2 = %d\n",commands.Fan2);
 		
 		/* Compute next task arrival */
 		add_timespec( &trigger, &trigger, &period );
 
-		/* Wait until the end of the period */
+		/* Wait until the end of the period (5 second period)*/
 		sem_timedwait( &timer, &trigger );
 
 	}
@@ -409,7 +387,10 @@ void *GUI_connection_handler(void *socket_desc){
 	return 0;
 }
 
-void build_Txt_line(char buff1[200], struct data_receive * msg){
+
+/* Text file should include both data tag (name) and data value. */
+/* Put factory1 msg and factory2 msg in each buffer1 and buffer2. Then, merge the factory 1 data and factory 2 data */
+voidbuild_Txt_line(char buff1[200], struct data_receive * msg){
 
 	char buff2[19];
 	strcat( buff1, "Fac: \t");
@@ -439,11 +420,12 @@ void build_Txt_line(char buff1[200], struct data_receive * msg){
 }
 
 
+/* generate data set for GUI. the data include the factory 1 & 2 data and prediction result */
 void build_GUI_message(char buff1[200], TempMem Mem1, TempMem Mem2){
 
 	char buff2[19];
 	
-	pthread_mutex_lock( &(Mem1.MemMutex) );            // Protect the variable
+	pthread_mutex_lock( &(Mem1.MemMutex) );            // Use the mutex to protect the variable
 	pthread_mutex_lock( &(Mem2.MemMutex) );             // Protect the variable      		 
 	
 	sprintf(buff2, "%0.2f", Mem1.temp[MEM_SIZE-1]);    // Append Temperature Fac1
@@ -497,8 +479,8 @@ void build_GUI_message(char buff1[200], TempMem Mem1, TempMem Mem2){
 	strcat( buff1, "\0");
 	
 	
-	pthread_mutex_unlock ( &(Mem2.MemMutex));
-	pthread_mutex_unlock ( &(Mem1.MemMutex));
+	pthread_mutex_unlock ( &(Mem2.MemMutex)); //unlock the mutext
+	pthread_mutex_unlock ( &(Mem1.MemMutex)); //unlock the mutext
 	
 	return ;
 

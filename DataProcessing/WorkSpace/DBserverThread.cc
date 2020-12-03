@@ -33,12 +33,17 @@ struct data_receive{
 };
 
 #include <time.h>
+
+/* add_timespec: add two timespecs
+ timespec: Structure holding an interval broken down into seconds and nanoseconds.
+ */
+
 void add_timespec (struct timespec *s,
                    const struct timespec *t1,
                    const struct timespec *t2)
 {
-  s->tv_sec  = t1->tv_sec  + t2->tv_sec;
-  s->tv_nsec = t1->tv_nsec + t2->tv_nsec;
+  s->tv_sec  = t1->tv_sec  + t2->tv_sec; /*second*/
+  s->tv_nsec = t1->tv_nsec + t2->tv_nsec; /*nanosecond*/
   s->tv_sec += s->tv_nsec/1000000000;
   s->tv_nsec %= 1000000000;
 }
@@ -174,7 +179,7 @@ int main(int argc , char *argv[]){
 	
 	/* Prepare the sockaddr_in structure */
 	server1.sin_family = AF_INET;
-	server1.sin_addr.s_addr = inet_addr("10.0.2.15");
+	server1.sin_addr.s_addr = inet_addr("127.0.0.1");
 	server1.sin_port = htons( 8080 );
 
 
