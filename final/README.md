@@ -46,7 +46,7 @@ The AI codes are already merged in the Data Maange server file (DBserverThread.c
     $python3 --version.
     
     If it corresponds to version 3, type in the next line of the terminal:
-    $python3.py
+    $python3 final.py
 
 4. The Graphical User Interface shall be deployed. In order to start seeing the data, click the Start button and
     it shall start to wait for the threads from the "Manage Communication" node. In order to confirm that it is
