@@ -4,11 +4,11 @@ Architecture and Programming of Software Systems
 
 ---Program execution manual---
 
-<<IoT>>
+-IoT-
 1. compile programs
     $ make
 
-<<Data Manage>>
+-Data Manage-
 1. First make sure to that the IP address of the sockets defined insed DBserverThread.cc match the actual IP address of the raspberry that will execute the code. Use below command to check the address. 
         $ ifconfig
 
@@ -21,8 +21,7 @@ Architecture and Programming of Software Systems
 
 4. With the server running, you can see that the server waits for incoming communications and assigned handlers when either a factory or a GUI request a connection. At any time the records of the process can be observed in Data1.txt.
 
-
-<<AI>>
+-AI-
 The AI codes are already merged in the Data Maange server file (DBserverThread.cc). But also you can run the AI programs separately. 
 
 1. The compiling step
@@ -34,7 +33,7 @@ The AI codes are already merged in the Data Maange server file (DBserverThread.c
 3. Execute the program
   $./a.out
 
-<<GUI>>
+-GUI-
 
 1. After runnning the executable of the server, open the final.py file and make sure to change the IP address
     in line 19 in order to match with the one typed in the server file.
@@ -65,7 +64,7 @@ The AI codes are already merged in the Data Maange server file (DBserverThread.c
 
 $  mkdir ${HOME}/git
 
-<<Download>>
+-Download-
 
 How to download all files of the git repository to your new local storage
 
@@ -77,7 +76,8 @@ $ git clone https://github.com/SeungahLEE0820/2MAE501
 
 $ git pull 
 
-<<Upload>>
+
+-Upload-
 
  How to upload files from your local storage (git folder) to the repository 
 
