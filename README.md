@@ -1,8 +1,8 @@
 # 2MAE501
-Architecture &amp; Programming of Software Systems
+Architecture and Programming of Software Systems
 
 
-Program execution manual
+---Program execution manual---
 
 <<IoT>>
 1. compile programs
@@ -11,9 +11,11 @@ Program execution manual
 <<Data Manage>>
 1. First make sure to that the IP address of the sockets defined insed DBserverThread.cc match the actual IP address of the raspberry that will execute the code. Use below command to check the address. 
         $ ifconfig
+
 2. Then compile DBserverThread.cc with the following command to create the executable. :
 	$ g++ -Wall -I/usr/local/include -c DBserverThread.cc
 	$ g++ -L/usr/local/lib server.o -lgsl -lgslcblas -lm -pthread -lstdc++
+
 3. Execute the program
 	$ ./server
 
@@ -21,24 +23,42 @@ Program execution manual
 
 
 <<AI>>
+The AI codes are already merged in the Data Maange server file (DBserverThread.cc). But also you can run the AI programs separately. 
+
+1. The compiling step
+  $g++ -Wall -I/usr/local/include -c test.cpp AI.cpp
+
+2. The linking step
+  $g++ -L/usr/local/lib tets.o AI.o -lgsl -lgslcblas -lm
+
+3. Execute the program
+  $./a.out
 
 <<GUI>>
 
+1. After runnning the executable of the server, open the final.py file and make sure to change the IP address
+    in line 19 in order to match with the one typed in the server file.
+
+2. Once the IP address matches, in another terminal change the directory to the path where the final.py file is
+    found.
+
+3. It is necessary to have installed python 3 version in order to run the script. Make sure to have it installed
+    by typing 
+    $python3 --version.
+    
+    If it corresponds to version 3, type in the next line of the terminal:
+    $python3.py
+
+4. The Graphical User Interface shall be deployed. In order to start seeing the data, click the Start button and
+    it shall start to wait for the threads from the "Manage Communication" node. In order to confirm that it is
+    working, open in the side the terminal where the command was run. A string of zeros shall appear every line.
+    This means that the GUI is waiting to receive data from the factories.
 
 
 
 
 
-
-
-
-
-
-
-
-
-
-Github manual
+---Github manual---
 
 1. Creat a git folder in your computer
 
