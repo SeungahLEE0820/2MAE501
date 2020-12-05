@@ -1,6 +1,43 @@
 # 2MAE501
 Architecture &amp; Programming of Software Systems
 
+
+Program execution manual
+
+<<IoT>>
+1. compile programs
+    $ make
+
+<<Data Manage>>
+1. First make sure to that the IP address of the sockets defined insed DBserverThread.cc match the actual IP address of the raspberry that will execute the code. Use below command to check the address. 
+        $ ifconfig
+2. Then compile DBserverThread.cc with the following command to create the executable. :
+	$ g++ -Wall -I/usr/local/include -c DBserverThread.cc
+	$ g++ -L/usr/local/lib server.o -lgsl -lgslcblas -lm -pthread -lstdc++
+3. Execute the program
+	$ ./server
+
+4. With the server running, you can see that the server waits for incoming communications and assigned handlers when either a factory or a GUI request a connection. At any time the records of the process can be observed in Data1.txt.
+
+
+<<AI>>
+
+<<GUI>>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 Github manual
 
 1. Creat a git folder in your computer
